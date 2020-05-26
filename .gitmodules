@@ -1,0 +1,3 @@
+[submodule "basic-syntax-tests"]
+	path = basic-syntax-tests
+	url = https://github.com/NaturalTech/basic-syntax-tests
