@@ -29,17 +29,6 @@ for index, row in tqdm(corpora_dataframe.iterrows()):
     processed_row.update(row_dict)
     processed.append(processed_row)
 
-# results = {
-#         'corpus': INPUT_CORPORA,
-#         'test type': ,
-#         'N',
-#         'true+',
-#         'false-',
-#         'false+',
-#         'precision',
-#         'recall',
-#         'F-score'}
-
 resuts = {'type':
         'task'
         'N'
@@ -62,16 +51,17 @@ verb_recognition = {'true+': 0,
         }
 
 for test in processed: 
-    if test['expected subject'] == test['response']['2-Sentences'][0]\
+    slots = test['response']['2-Sentences'][0]\
             ['2-Sentence-Clauses'][0]['2-Deep-Structure']\
-            ['1-SVO-Slots']['0-Subject']:
+            ['1-SVO-Slots']
+    if test['expected subject'] == slots['0-Subject']:
         subject_recognition['true+'] = subject_recognition.get('true+', 0) + 1
-    elif test['expected subject'] == test['response']['2-Sentences'][0]\
-            ['2-Sentence-Clauses'][0]['2-Deep-Structure']\
-            ['1-SVO-Slots'].items():
+    elif test['expected subject'] == slots.items():
         subject_recognition['false+'] = subject_recognition.get('false+', 0) + 1
+        print('FN found. Expected: %s, got: %s' % (test['expected subject'], ', '.join([ x for x in slots.values() if x])))
     else:
         subject_recognition['false-'] = subject_recognition.get('false-', 0) + 1
+        print('FN found. Expected: %s, got: %s' % (test['expected subject'], ', '.join([ x for x in slots.values() if x])))
 
 
 sr_precision = subject_recognition['true+'] / float(subject_recognition['true+'] + subject_recognition['false+'])
