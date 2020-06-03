@@ -50,7 +50,8 @@ class Classificator(object):
 
 class Google(Classificator):
     """clase  for Google classificator"""
-    def __init__(self, arg):
+    name = 'Google'
+    def __init__(self):
         super(Google, self).__init__() 
         # Instantiates a client
         self.client = language.LanguageServiceClient()
@@ -63,31 +64,32 @@ class Google(Classificator):
             content=text,
             type=enums.Document.Type.PLAIN_TEXT)
 
-	# Detects the sentiment of the text
-        response = self.client.analyze_entities(document)
-
- # [(x.lemma, x.dependency_edge) for x in resp.tokens ]
-
         ret = {}
         ret['text'] = text
         ret['test_subject'] = None
         ret['test_object'] = None
         ret['test_verb'] = None
-        try:
-            ret['test_subject'] = response['response']['semantic_roles'][0]['subject']['text']
-        except Exception as e:
-            print(e)
-        try:
-            ret['test_object'] = response['response']['semantic_roles'][0]['object']['text']
-        except Exception as e:
-            print(e)
-        try:
-            ret['test_verb'] = response['response']['semantic_roles'][0]['verb']['text']
-        except Exception as e:
-            print(e)
-        return(ret)
 
-        
+	# Detects the sentiment of the text
+        response = self.client.analyze_syntax(document) 
+        for token in response.tokens:
+            dependency_edge = token.dependency_edge
+            if 'root' == enums.DependencyEdge.Label(dependency_edge.label).\
+                    name.lower():
+                ret['test_verb'] = token.lemma
+            elif 'nsubj' in enums.DependencyEdge.Label(dependency_edge.label).\
+                    name.lower():
+                # could be nsubj or nsubjpassive
+                ret['test_subject'] = token.lemma
+            elif enums.DependencyEdge.Label(dependency_edge.label).name.lower() in ['dobj', 'iobj']: 
+                ret['test_object'] = token.lemma
+            
+            debug_response = ['lema: %s, label: %s' % (token.lemma,
+                enums.DependencyEdge.Label(dependency_edge.label).name.lower())
+                for token in response.tokens]
+            ret['debug_response'] = debug_response
+        return ret
+
 
 class Watson(Classificator):
     """Class to call Watson api"""
@@ -118,17 +120,20 @@ class Watson(Classificator):
         ret['test_object'] = None
         ret['test_verb'] = None
         try:
-            ret['test_subject'] = response['response']['semantic_roles'][0]['subject']['text']
+            ret['test_subject'] = response['semantic_roles'][0]['subject']['text']
         except Exception as e:
             print(e)
         try:
-            ret['test_object'] = response['response']['semantic_roles'][0]['object']['text']
+            ret['test_object'] = response['semantic_roles'][0]['object']['text']
         except Exception as e:
             print(e)
         try:
-            ret['test_verb'] = response['response']['semantic_roles'][0]['verb']['text']
+            ret['test_verb'] = response['semantic_roles'][0]['action']['text']
         except Exception as e:
             print(e)
+
+        ret['debug_response'] = json.dumps(response)
+
         return(ret)
 
 
@@ -227,11 +232,14 @@ if __name__ == '__main__':
     output_processor = OutputProcessor()
     sentilecto_processor = Sentilecto()
     watson_processor = Watson()
+    google_processor = Google()
     for row in ds:
         sentilecto_processed = sentilecto_processor.process_text(row)
         watson_processed = watson_processor.process_text(row)
+        google_processed = google_processor.process_text(row)
         output_processor.add_output((sentilecto_processor, sentilecto_processed, row.to_dict()))
         output_processor.add_output((watson_processor, watson_processed, row.to_dict()))
+        output_processor.add_output((google_processor, google_processed, row.to_dict()))
 
     output_processor.analyze_outputs()
     df = pd.DataFrame(output_processor.results)
