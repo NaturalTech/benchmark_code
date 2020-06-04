@@ -1,0 +1,27 @@
+input,type,expected_subject,expected_object,expected_verb
+matamos a su padre,subject_specific,nosotros/nosotras,su padre,matar
+estoy lidiando con mis alumnos de la facultad durante todo el mes,subject_specific,yo,mis alumnos,lidiar
+esto me parece muy bien,subject_specific,esto,None,parecer
+llueve en la ciudad sin parar,subject_specific,None,None,llover
+ella odia correr por el parque a la noche,subject_specific,ella,correr por el parque a la noche,odiar
+lo matamos a su padre,subject_specific,nosotros/nosotras,su padre,matar
+no me anduvo el auto,subject_specific,el auto,None,andar
+a los ni�os debemos educarlos con propiedad,subject_specific,nosotros/nosotras,los ni�os,educar
+puedes comprarlo para navidad,subject_specific,tú,lo,comprar
+a el hombre lo atacaron ayer por la espalda,subject_specific,ellos/ellas,el hombre,atacar
+todos los meses llegaba el cartero con una excelente noticia,subject_specific,el cartero,None,llegar
+vos y yo somos tal para cual,subject_specific,vos y yo,None,ser
+odio caminar por el bosque,subject_specific,yo,caminar por el bosque,odiar
+me gusta caminar por el bosque,subject_specific,caminar por el bosque,None,caminar
+puede un hombre cambiar al mundo,subject_specific,un hombre,el mundo,cambiar
+los hombres han sido malos,subject_specific,los hombres,None,ser
+los hombres pueden haber sido malos,subject_specific,los hombres,None,ser
+Ella puede comer de todo,subject_specific,Ella,todo,comer
+lloraba mucho la condesa de Londres,subject_specific,la condesa de Londres,None,llorar
+"la casa, pese a las opiniones ajenas, no debe estar ubicada en la colina",subject_specific,la casa,None,estar
+"lloraba mucho, las manos apretadas",subject_specific,él/ella,None,llorar
+"cuchillo en mano, el hombre ataca a la bestia",subject_specific,el hombre,la bestia,atacar
+el perro y el gato son dos animales,subject_specific,el perro y el gato,None,ser
+todo lo dicho es para bien,subject_specific,todo lo dicho,None,ser
+el mueble de mi abuelo se rompe con facilidad,subject_specific,el mueble de mi abuelo,None,romper
+la casa se encuentra sobre la colina,subject_specific,la casa,None,encontrar

@@ -1,4 +1,4 @@
-input,type,expected principal verb,expected subject,expected od
+input,type,expected_verb,expected_subject,expected_object
 el alimento fue comido por los animales,passive voice,comer,los animales,el alimento
 la batalla fue ganada,passive voice,ganar,alguien,la batalla
 durante noches enteras fueron perseguidas las mujeres,passive voice,perseguir,algo,las mujeres

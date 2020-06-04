@@ -13,37 +13,61 @@ import csv
 import json
 import pandas as pd
 import requests
+import spacy
 
 class Classificator(object):
     """Base class for the Classificators"""
     def __init__(self):
         super(Classificator, self).__init__()
 
-    def test_classification(self, got, expected): 
+    def test_true_positive(self, obtained, expected):
+        # Is equal, the lower is equal or the lower is inside the expected. Obviously the expected could be 'in' the obtained
+        return obtained == expected or \
+                (obtained is not None and expected is not None and
+                        ((obtained.lower() == expected.lower()) or
+                (obtained.lower() in expected.lower())))
+
+    def test_true_negative(self, obtained, expected):
+        return obtained == expected and obtained is None
+
+    def test_false_positive(self, obtained, expected):
+        return (not self.test_true_positive(obtained, expected)) and (obtained is not None) and (obtained != "")
+
+    def test_false_negative(self, obtained, expected):
+        return ((obtained is None or obtained.strip() == "") and obtained != expected) 
+
+    def test_classification(self, obtained, expected): 
         # hardcoded for the first sentence / clause
+
+        # TP: condicion in string
+        # FP: condicion not in string
+        # FN: no hubo deteccion (es None y el expected es distinto de None)
         res = None
-        tp_s = got['test_subject'] == expected['expected_subject']
-        fp_s = got['test_subject'] != expected['expected_subject'] and got['test_subject'] in [expected['expected_object'], expected['expected_verb']]
-        fn_s = got['test_subject'] != expected['expected_subject'] and (not got['test_subject'] in [expected['expected_object'], expected['expected_verb']])
+        res_func = lambda res_arr: ['tp', 'tn', 'fp', 'fn'][res_arr.index(True)]
 
-        assert (tp_s + fp_s + fn_s) == 1, 'multiple conditions met error'
+        tp_s = self.test_true_positive(obtained['test_subject'], expected['expected_subject'])
+        tn_s = self.test_true_negative(obtained['test_subject'], expected['expected_subject'])
+        fp_s = self.test_false_positive(obtained['test_subject'], expected['expected_subject'])
+        fn_s = self.test_false_negative(obtained['test_subject'], expected['expected_subject']) 
+        if (tp_s + tn_s + fp_s + fn_s) > 1:#, 'multiple conditions met error' 
+            __import__('ipdb').set_trace()
+        res_s = res_func([tp_s, tn_s, fp_s, fn_s])
 
-        res_func = lambda tp, fp: 'tp' if tp else ('fp' if fp else 'fn')
+        tp_o = self.test_true_positive(obtained['test_object'], expected['expected_object'])
+        tn_o = self.test_true_negative(obtained['test_object'], expected['expected_object'])
+        fp_o = self.test_false_positive(obtained['test_object'], expected['expected_object'])
+        fn_o = self.test_false_negative(obtained['test_object'], expected['expected_object']) 
+        if (tp_o + + tn_o + fp_o + fn_o) > 1:
+            __import__('ipdb').set_trace() #, 'multiple conditions met error' 
+        res_o = res_func([tp_o, tn_o, fp_o, fn_o])
 
-        res_s = res_func(tp_s, fp_s)
-
-        tp_o = got['test_object'] == expected['expected_object']
-        fp_o = got['test_object'] != expected['expected_object'] and got['test_object'] in [expected['expected_subject'], expected['expected_verb']]
-        fn_o = got['test_object'] != expected['expected_object'] and (not got['test_object'] in [expected['expected_subject'], expected['expected_verb']])
-        assert (tp_o + fp_o + fn_o) == 1, 'multiple conditions met error' 
-        res_o = res_func(tp_o, fp_o)
-
-        tp_v = got['test_verb'] == expected['expected_verb']
-        fp_v = got['test_verb'] != expected['expected_verb'] and got['test_verb'] in [expected['expected_subject'], expected['expected_object']]
-        fn_v = got['test_verb'] != expected['expected_verb'] and (not got['test_verb'] in [expected['expected_subject'], expected['expected_object']])
-
-        assert (tp_v + fp_v + fn_v) == 1, 'multiple conditions met error' 
-        res_v = res_func(tp_v, fp_v)
+        tp_v = self.test_true_positive(obtained['test_verb'], expected['expected_verb'])
+        tn_v = self.test_true_negative(obtained['test_verb'], expected['expected_verb'])
+        fp_v = self.test_false_positive(obtained['test_verb'], expected['expected_verb'])
+        fn_v = self.test_false_negative(obtained['test_verb'], expected['expected_verb']) 
+        if (tp_v + + tn_v + fp_v + fn_v) > 1:#, 'multiple conditions met error' 
+            __import__('ipdb').set_trace()
+        res_v = res_func([tp_v, tn_v, fp_v, fn_v])
 
         res = {'result_subject': res_s, 'result_object': res_o, 'result_verb': res_v}
         return res
@@ -85,7 +109,7 @@ class Google(Classificator):
                 ret['test_object'] = token.lemma
             
             debug_response = ['lema: %s, label: %s' % (token.lemma,
-                enums.DependencyEdge.Label(dependency_edge.label).name.lower())
+                enums.DependencyEdge.Label(token.dependency_edge.label).name.lower())
                 for token in response.tokens]
             ret['debug_response'] = debug_response
         return ret
@@ -94,9 +118,10 @@ class Google(Classificator):
 class Watson(Classificator):
     """Class to call Watson api"""
     name = 'Watson'
-    def __init__(self):
+    def __init__(self, lang = 'es'):
         super(Watson, self).__init__()
         
+        self.lemmatizer = spacy.load(lang)
         
         self.apikey='WTc7S5wG9IYhOK_Qe8TYl_mgKpzhb_5Gk7ejCk-vtYVS'
         self.url = 'https://api.us-south.natural-language-understanding.watson.cloud.ibm.com/instances/c205be7e-27ed-4e7d-8c95-c9aa4e6bf9e0'
@@ -122,17 +147,21 @@ class Watson(Classificator):
         try:
             ret['test_subject'] = response['semantic_roles'][0]['subject']['text']
         except Exception as e:
-            print(e)
+            print('Identified subject is empty for text: "%s", processor: "%s"' % (text, self.name))
         try:
             ret['test_object'] = response['semantic_roles'][0]['object']['text']
         except Exception as e:
-            print(e)
+            print('Identified object is empty for text: "%s", processor: "%s"' % (text, self.name))
         try:
             ret['test_verb'] = response['semantic_roles'][0]['action']['text']
+            tokens = self.lemmatizer(ret['test_verb']) 
+            for tok in tokens:
+                if tok.pos_ in ['VERB', 'PROPN']:
+                    ret['test_verb'] = tok.lemma_
         except Exception as e:
-            print(e)
+            print('Identified verb is empty for text: "%s", processor: "%s"' % (text, self.name))
 
-        ret['debug_response'] = json.dumps(response)
+        ret['debug_response'] = json.dumps(response['semantic_roles'])
 
         return(ret)
 
@@ -161,22 +190,34 @@ class Sentilecto(Classificator):
         ret['test_object'] = None
         ret['test_verb'] = None
 
-        slots = response.json()['2-Sentences'][0]\
-            ['2-Sentence-Clauses'][0]['2-Deep-Structure']\
-            ['1-SVO-Slots']
+        # TODO: fixme, this is taking only first sentence and clause.
+        json_obj = response.json()
+        try:
+            slots = json_obj['2-Sentences'][0]\
+                ['2-Sentence-Clauses'][0]['2-Deep-Structure']\
+                ['1-SVO-Slots']
+        except Exception as e: 
+            print('Identification for text: "%s", processor: "%s" is invalid: out %s' % (text, self.name, json.dumps(json_obj)))
+            return ret
+
         try:
             ret['test_subject'] = slots['0-Subject']
         except Exception as e:
-            print(e)
+            print('Identified subject is empty for text: "%s", processor: "%s"' % (text, self.name))
         try:
-            obj= slots["2-Equative"] + slots["2-Phrasal-Verb-Complement"] + slots["2-Direct-Object"]
+            obj= slots["2-Phrasal-Verb-Complement"] + slots["2-Direct-Object"] # slots["2-Equative"] + 
             ret['test_object'] = obj
         except Exception as e:
-            print(e)
+            print('Identified object is empty for text: "%s", processor: "%s"' % (text, self.name))
         try:
             ret['test_verb'] = slots['1-Verb']
         except Exception as e:
-            print(e)
+            print('Identified verb is empty for text: "%s", processor: "%s"' % (text, self.name))
+
+        ret['debug_response'] = json.dumps(json_obj['2-Sentences'])
+        for k, v in ret.items():
+            if v== "":
+                ret[k] = None
         return(ret)
 
 
@@ -185,9 +226,9 @@ class InputDatasetIterator(object):
     def __init__(self):
         super(InputDatasetIterator, self).__init__()
         # TODO: Move to config file
-        self.INPUT_CORPORA = "/home/danito/proj/naturaltech/benchmark-repo/data/benchmark_ds_v0.1.csv"
+        self.INPUT_CORPORA = "/home/danito/proj/naturaltech/benchmark-repo/data/test_subject.csv"
 
-        self.corpora_dataframe = pd.read_csv(self.INPUT_CORPORA)
+        self.corpora_dataframe = pd.read_csv(self.INPUT_CORPORA, encoding='latin8')
 
         self.iterator = self.corpora_dataframe.iterrows()
 
@@ -253,13 +294,12 @@ if __name__ == '__main__':
     # sr_f1 = 2 * sr_precision * sr_recall /(sr_precision + sr_recall)
 
     print(output_processor)
-    __import__('ipdb').set_trace()
     results_df = pd.DataFrame(output_processor.results)
-    results_df.to_csv('results.csv')
+    results_df.to_csv('results.csv', sep=';')
     results_df['id'] = results_df.index
-    wide_res_df = pd.wide_to_long(results_df, stubnames=['result'], i=['id'], j='resulting', sep='_',suffix='\\w+')
+    wide_res_df = pd.wide_to_long(results_df, stubnames=['result'], i=['id'], j='test', sep='_',suffix='\\w+')
 
-    res_count_df = wide_res_df.groupby(['resulting', 'result', 'processor']).agg({'text':['count']}) 
+    res_count_df = wide_res_df.groupby(['test', 'result', 'processor']).agg({'text':['count']}) 
     res_count_df = res_count_df.reset_index()
     res_count_df['count'] = res_count_df.text.reset_index()['count']
 
