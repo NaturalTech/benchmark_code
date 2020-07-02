@@ -23,18 +23,18 @@ class Classificator(object):
     def test_true_positive(self, obtained, expected):
         # Is equal, the lower is equal or the lower is inside the expected. Obviously the expected could be 'in' the obtained
         return obtained == expected or \
-                (obtained is not None and expected is not None and
+                (obtained  != "None"  and expected  != "None"  and
                         ((obtained.lower() == expected.lower()) or
                 (obtained.lower() in expected.lower())))
 
     def test_true_negative(self, obtained, expected):
-        return obtained == expected and obtained is None
+        return obtained == expected and obtained == 'None'
 
     def test_false_positive(self, obtained, expected):
-        return (not self.test_true_positive(obtained, expected)) and (obtained is not None) and (obtained != "")
+        return (not self.test_true_positive(obtained, expected)) and (obtained  != "None" )
 
     def test_false_negative(self, obtained, expected):
-        return ((obtained is None or obtained.strip() == "") and obtained != expected) 
+        return (obtained == "None" and obtained != expected) 
 
     def test_classification(self, obtained, expected): 
         # hardcoded for the first sentence / clause
@@ -50,7 +50,7 @@ class Classificator(object):
         fp_s = self.test_false_positive(obtained['test_subject'], expected['expected_subject'])
         fn_s = self.test_false_negative(obtained['test_subject'], expected['expected_subject']) 
         if (tp_s + tn_s + fp_s + fn_s) > 1:#, 'multiple conditions met error' 
-            __import__('ipdb').set_trace()
+            print("ERROR: Multiple classifaction error")
         res_s = res_func([tp_s, tn_s, fp_s, fn_s])
 
         tp_o = self.test_true_positive(obtained['test_object'], expected['expected_object'])
@@ -58,7 +58,7 @@ class Classificator(object):
         fp_o = self.test_false_positive(obtained['test_object'], expected['expected_object'])
         fn_o = self.test_false_negative(obtained['test_object'], expected['expected_object']) 
         if (tp_o + + tn_o + fp_o + fn_o) > 1:
-            __import__('ipdb').set_trace() #, 'multiple conditions met error' 
+            print("ERROR: Multiple classifaction error")
         res_o = res_func([tp_o, tn_o, fp_o, fn_o])
 
         tp_v = self.test_true_positive(obtained['test_verb'], expected['expected_verb'])
@@ -66,7 +66,7 @@ class Classificator(object):
         fp_v = self.test_false_positive(obtained['test_verb'], expected['expected_verb'])
         fn_v = self.test_false_negative(obtained['test_verb'], expected['expected_verb']) 
         if (tp_v + + tn_v + fp_v + fn_v) > 1:#, 'multiple conditions met error' 
-            __import__('ipdb').set_trace()
+            print("ERROR: Multiple classifaction error")
         res_v = res_func([tp_v, tn_v, fp_v, fn_v])
 
         res = {'result_subject': res_s, 'result_object': res_o, 'result_verb': res_v}
@@ -111,7 +111,11 @@ class Google(Classificator):
             debug_response = ['lema: %s, label: %s' % (token.lemma,
                 enums.DependencyEdge.Label(token.dependency_edge.label).name.lower())
                 for token in response.tokens]
-            ret['debug_response'] = debug_response
+            ret['debug_response'] = json.dumps(debug_response)
+
+        for k, v in ret.items():
+            if v is None or v.strip()== "":
+                ret[k] = "None"
         return ret
 
 
@@ -162,6 +166,10 @@ class Watson(Classificator):
             print('Identified verb is empty for text: "%s", processor: "%s"' % (text, self.name))
 
         ret['debug_response'] = json.dumps(response['semantic_roles'])
+
+        for k, v in ret.items():
+            if v is None or v.strip()== "":
+                ret[k] = "None"
 
         return(ret)
 
@@ -216,8 +224,8 @@ class Sentilecto(Classificator):
 
         ret['debug_response'] = json.dumps(json_obj['2-Sentences'])
         for k, v in ret.items():
-            if v== "":
-                ret[k] = None
+            if v is None or v.strip()== "":
+                ret[k] = "None"
         return(ret)
 
 
@@ -267,6 +275,52 @@ class OutputProcessor(object):
             res_d.update(expected)
             res_d.update(res)
             self.results.append(res_d)
+
+    def get_index_and_default_to_zero(self, key, df):
+        ret = 0
+        try:
+            ret = df.set_index('result').loc[[key], ['count']]['count']
+        except KeyError:
+            pass
+        return float(ret) 
+
+    def get_group_metrics(self): 
+        results_df = pd.DataFrame(self.results)
+        results_df.to_csv('results.csv', sep=';')
+        results_df['id'] = results_df.index
+        wide_res_df = pd.wide_to_long(results_df, stubnames=['result'],
+                i=['id'], j='test', sep='_',suffix='\\w+')
+
+        res_count_df = wide_res_df.groupby(['test', 'result',
+            'processor']).agg({'text':['count']})
+        res_count_df = res_count_df.reset_index()
+        res_count_df['count'] = res_count_df.text.reset_index()['count']
+
+        del res_count_df['text'] 
+
+        tp_acum = {}
+        for i in res_count_df.groupby(['test', 'processor']):
+            test = i[0][0]
+            processor = i[0][1]
+            fp = self.get_index_and_default_to_zero('fp', i[1])
+            fn = self.get_index_and_default_to_zero('fn', i[1])
+            tp = self.get_index_and_default_to_zero('tp', i[1])
+            tn = self.get_index_and_default_to_zero('tn', i[1])
+            tp_acum[processor] = tp_acum.get(processor, 0) + tp
+            N = fp + fn + tp + tn
+            # assert N == ds.N
+            accuracy = tp / float(N)
+            precision = tp / (tp + fp)
+            recall = tp / (tp + fn)
+            f1 = 2 * precision * recall / (precision + recall)
+
+            print("""Results: test: '%s', processor = '%s', N: %d, tp: %d, tn: %d, fp: %d, fn: %d,
+                        precision: %.2f, recall: %.2f, F-score: %.2f""" % ( test, processor, N,
+                            tp, tn, fp, fn, precision, recall, f1))
+
+        for k, v in tp_acum.items():
+            print("Total accuracy: processor = '%s', Accuracy = %.4f" % (k, v/(3*N)))
+
             
 if __name__ == '__main__':
     ds = InputDatasetIterator()
@@ -283,42 +337,4 @@ if __name__ == '__main__':
         output_processor.add_output((google_processor, google_processed, row.to_dict()))
 
     output_processor.analyze_outputs()
-    df = pd.DataFrame(output_processor.results)
-    # sr_precision = output_processor.subject_recognition['tp'] / \
-    #         float(output_processor.subject_recognition['tp'] + \
-    #         output_processor.subject_recognition['fp'])
-    # sr_recall = output_processor.subject_recognition['tp'] / \
-    #         float(output_processor.subject_recognition['tp'] + \
-    #         output_processor.subject_recognition['fn'])
-
-    # sr_f1 = 2 * sr_precision * sr_recall /(sr_precision + sr_recall)
-
-    print(output_processor)
-    results_df = pd.DataFrame(output_processor.results)
-    results_df.to_csv('results.csv', sep=';')
-    results_df['id'] = results_df.index
-    wide_res_df = pd.wide_to_long(results_df, stubnames=['result'], i=['id'], j='test', sep='_',suffix='\\w+')
-
-    res_count_df = wide_res_df.groupby(['test', 'result', 'processor']).agg({'text':['count']}) 
-    res_count_df = res_count_df.reset_index()
-    res_count_df['count'] = res_count_df.text.reset_index()['count']
-
-    del res_count_df['text']
-
-    print(res_count_df)
-
-
-    # print("""Corpus: %s
-# test: %s
-# N: %d
-# tp: %d
-# fn: %d
-# fp: %d
-# precision: %.2f
-# recall: %.2f
-# F-score: %.2f""" % (ds.INPUT_CORPORA, ds.testtype, ds.length(),
-    # output_processor.subject_recognition['tp'],
-    # output_processor.subject_recognition['fp'],
-    # output_processor.subject_recognition['fn'], sr_precision,
-    # sr_recall, sr_f1))
-
+    output_processor.get_group_metrics()
